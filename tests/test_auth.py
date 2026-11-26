@@ -68,6 +68,47 @@ def test_duplicate_email_and_invalid_login() -> None:
     assert invalid.status_code == 401
 
 
+def test_change_password_requires_current_password_and_updates_login() -> None:
+    register = client.post(
+        "/api/auth/register",
+        json={"name": "Password User", "email": "password-user@example.com", "password": "old-password"},
+    )
+    assert register.status_code == 201
+    login = client.post(
+        "/api/auth/login",
+        json={"email": "password-user@example.com", "password": "old-password"},
+    )
+    headers = {"Authorization": f"Bearer {login.json()['access_token']}"}
+
+    unauthenticated = client.post(
+        "/api/auth/change-password",
+        json={"current_password": "old-password", "new_password": "new-password"},
+    )
+    assert unauthenticated.status_code == 401
+
+    incorrect = client.post(
+        "/api/auth/change-password",
+        headers=headers,
+        json={"current_password": "wrong-password", "new_password": "new-password"},
+    )
+    assert incorrect.status_code == 400
+
+    changed = client.post(
+        "/api/auth/change-password",
+        headers=headers,
+        json={"current_password": "old-password", "new_password": "new-password"},
+    )
+    assert changed.status_code == 204
+    assert client.post(
+        "/api/auth/login",
+        json={"email": "password-user@example.com", "password": "old-password"},
+    ).status_code == 401
+    assert client.post(
+        "/api/auth/login",
+        json={"email": "password-user@example.com", "password": "new-password"},
+    ).status_code == 200
+
+
 def test_repository_ownership_check() -> None:
     owner_register = client.post(
         "/api/auth/register",
